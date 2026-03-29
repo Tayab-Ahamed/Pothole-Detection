@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pothole Detection Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            cyan:  { DEFAULT: '#00e5ff' },
+            amber: { neon: '#ffb300' },
+          },
+          fontFamily: { mono: ['JetBrains Mono', 'Fira Code', 'monospace'] },
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --cyan:  #00e5ff;
+      --amber: #ffb300;
+      --bg:    #080c12;
+      --card:  #0e1520;
+      --border:#1a2535;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: #e2e8f0;
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+    }
+
+    /* ── Scanline overlay ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0px, transparent 3px,
+        rgba(0,0,0,.08) 3px, rgba(0,0,0,.08) 4px
+      );
+    }
+
+    /* ── Glow helpers ── */
+    .glow-cyan  { box-shadow: 0 0 18px rgba(0,229,255,.35); }
+    .glow-amber { box-shadow: 0 0 18px rgba(255,179,0,.35); }
+    .text-glow  { text-shadow: 0 0 14px var(--cyan), 0 0 28px rgba(0,229,255,.4); }
+
+    /* ── Card ── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+
+    /* ── Stat chip ── */
+    .stat-chip {
+      background: rgba(0,229,255,.06);
+      border: 1px solid rgba(0,229,255,.2);
+      border-radius: 8px;
+      padding: 10px 16px;
+      text-align: center;
+    }
+    .stat-chip .value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--cyan);
+      line-height: 1;
+    }
+    .stat-chip .label { font-size: .7rem; color: #64748b; margin-top: 4px; letter-spacing: .08em; text-transform: uppercase; }
+
+    /* ── Status badge ── */
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: .75rem; font-weight: 600; letter-spacing: .06em;
+      border-radius: 999px; padding: 4px 12px;
+    }
+    .badge-active  { background: rgba(0,229,255,.12); color: var(--cyan); border: 1px solid rgba(0,229,255,.3); }
+    .badge-idle    { background: rgba(100,116,139,.12); color: #64748b; border: 1px solid rgba(100,116,139,.25); }
+    .badge-dot { width:7px; height:7px; border-radius:50%; }
+    .badge-active .badge-dot  { background: var(--cyan); animation: pulse 1.4s ease-in-out infinite; }
+    .badge-idle   .badge-dot  { background: #64748b; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: .875rem; font-weight: 600; border-radius: 8px;
+      padding: 10px 20px; cursor: pointer; transition: all .15s;
+      border: none; outline: none;
+    }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-primary {
+      background: var(--cyan); color: #080c12;
+    }
+    .btn-primary:not(:disabled):hover { filter: brightness(1.1); box-shadow: 0 0 20px rgba(0,229,255,.5); }
+    .btn-danger {
+      background: transparent; color: #f87171;
+      border: 1px solid rgba(248,113,113,.4);
+    }
+    .btn-danger:not(:disabled):hover { background: rgba(248,113,113,.1); box-shadow: 0 0 16px rgba(248,113,113,.3); }
+    .btn-ghost {
+      background: transparent; color: #94a3b8;
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:not(:disabled):hover { background: rgba(255,255,255,.05); color: #e2e8f0; }
+    .btn-purple {
+      background: transparent; color: #c084fc;
+      border: 1px solid rgba(192,132,252,.35);
+    }
+    .btn-purple:not(:disabled):hover { background: rgba(192,132,252,.08); box-shadow: 0 0 16px rgba(192,132,252,.3); }
+
+    /* ── Slider ── */
+    .slider { -webkit-appearance: none; appearance: none; width: 100%; height: 4px; border-radius: 4px; background: var(--border); outline: none; }
+    .slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--cyan); cursor: pointer; box-shadow: 0 0 10px rgba(0,229,255,.6); }
+    .slider::-moz-range-thumb    { width: 18px; height: 18px; border-radius: 50%; background: var(--cyan); cursor: pointer; border: none; box-shadow: 0 0 10px rgba(0,229,255,.6); }
+
+    /* ── Progress bar ── */
+    .progress-track { background: var(--border); border-radius: 4px; height: 4px; overflow: hidden; }
+    .progress-fill  { height: 100%; background: var(--cyan); border-radius: 4px; transition: width .3s ease; box-shadow: 0 0 8px rgba(0,229,255,.5); }
+
+    /* ── Video feed ── */
+    #video-feed {
+      width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block;
+      border-radius: 8px; background: #000;
+    }
+
+    /* ── File drop zone ── */
+    .drop-zone {
+      border: 2px dashed var(--border); border-radius: 10px;
+      padding: 32px; text-align: center;
+      transition: all .2s; cursor: pointer;
+    }
+    .drop-zone.drag-over {
+      border-color: var(--cyan); background: rgba(0,229,255,.05);
+    }
+    .drop-zone input[type="file"] { display: none; }
+
+    /* ── Notification toast ── */
+    #toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+    .toast {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 8px; padding: 12px 18px;
+      font-size: .82rem; min-width: 240px;
+      animation: slideIn .25s ease;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .toast.success { border-left: 3px solid #4ade80; }
+    .toast.error   { border-left: 3px solid #f87171; }
+    .toast.info    { border-left: 3px solid var(--cyan); }
+
+    /* ── Animations ── */
+    @keyframes pulse   { 0%,100%{opacity:1} 50%{opacity:.4} }
+    @keyframes slideIn { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:translateX(0)} }
+    @keyframes fadeIn  { from{opacity:0} to{opacity:1} }
+    .fade-in { animation: fadeIn .3s ease; }
+
+    /* ── Tab ── */
+    .tab-btn { padding: 8px 20px; border-radius: 6px; font-size:.85rem; font-weight:600; cursor:pointer; transition:all .15s; color:#64748b; }
+    .tab-btn.active { background: rgba(0,229,255,.1); color: var(--cyan); }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body class="dark">
+
+<!-- ═══════════════════════ HEADER ═══════════════════════ -->
+<header style="border-bottom:1px solid var(--border); backdrop-filter:blur(12px); position:sticky; top:0; z-index:50; background:rgba(8,12,18,.85);">
+  <div class="max-w-screen-xl mx-auto px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <span style="font-size:1.5rem;">🛣️</span>
+      <div>
+        <h1 style="font-size:1.1rem; font-weight:700; letter-spacing:.04em;" class="text-glow">POTHOLE DETECTOR</h1>
+        <p style="font-size:.7rem; color:#475569; letter-spacing:.1em;">YOLOv8 · Real-Time Detection</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <span id="status-badge" class="badge badge-idle"><span class="badge-dot"></span>IDLE</span>
+      <button class="btn btn-ghost" onclick="resetStats()" title="Reset counters">↺ Reset</button>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════════════ MAIN ═══════════════════════ -->
+<main class="max-w-screen-xl mx-auto px-6 py-8" style="position:relative;z-index:1;">
+  <div class="grid gap-6" style="grid-template-columns: 1fr 340px;">
+
+    <!-- ── LEFT COLUMN ── -->
+    <div class="flex flex-col gap-6">
+
+      <!-- Video card -->
+      <div class="card p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h2 style="font-size:.85rem; font-weight:600; letter-spacing:.1em; color:#94a3b8;">LIVE FEED</h2>
+          <div class="flex gap-2">
+            <button id="start-btn" class="btn btn-primary" onclick="startDetection()">▶ Start Detection</button>
+            <button id="stop-btn"  class="btn btn-danger"  onclick="stopDetection()">■ Stop</button>
+          </div>
+        </div>
+        <div style="border-radius:8px; overflow:hidden; border:1px solid var(--border);">
+          <img id="video-feed" src="{{ url_for('video_feed') }}" alt="Live feed" />
+        </div>
+      </div>
+
+      <!-- Tabs: Upload / Stats -->
+      <div class="card p-5">
+        <div class="flex gap-1 mb-5" style="border-bottom:1px solid var(--border); padding-bottom:10px;">
+          <button class="tab-btn active" onclick="switchTab('upload', this)">Upload File</button>
+          <button class="tab-btn"        onclick="switchTab('log', this)">Detection Log</button>
+        </div>
+
+        <!-- Upload tab -->
+        <div id="tab-upload" class="fade-in">
+          <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()"
+               ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+            <input type="file" id="file-input" accept=".png,.jpg,.jpeg,.mp4,.avi,.mov" onchange="handleFileSelect(event)" />
+            <p style="font-size:2rem; margin-bottom:8px;">📂</p>
+            <p style="font-weight:600; color:#94a3b8;">Drop image or video here</p>
+            <p style="font-size:.78rem; color:#475569; margin-top:4px;">PNG · JPG · MP4 · AVI · MOV — up to 500 MB</p>
+          </div>
+
+          <div id="selected-file-info" class="hidden mt-3 flex items-center justify-between"
+               style="background:rgba(0,229,255,.05); border:1px solid rgba(0,229,255,.15); border-radius:8px; padding:10px 14px;">
+            <div>
+              <p id="file-name" style="font-size:.85rem; font-weight:600;"></p>
+              <p id="file-size" style="font-size:.72rem; color:#64748b;"></p>
+            </div>
+            <button class="btn btn-purple" id="process-btn" onclick="uploadAndProcess()">⚡ Process</button>
+          </div>
+
+          <!-- Progress -->
+          <div id="progress-section" class="hidden mt-4">
+            <div class="flex justify-between mb-1" style="font-size:.75rem; color:#64748b;">
+              <span id="progress-label">Processing…</span>
+              <span id="progress-pct">0%</span>
+            </div>
+            <div class="progress-track"><div class="progress-fill" id="progress-bar" style="width:0%"></div></div>
+          </div>
+
+          <!-- Result image -->
+          <div id="result-section" class="hidden mt-5 fade-in">
+            <div class="flex items-center justify-between mb-3">
+              <h3 style="font-size:.85rem; font-weight:600; letter-spacing:.08em; color:#94a3b8;">RESULT</h3>
+              <div class="flex gap-2">
+                <span id="result-dets" class="badge badge-active" style="display:none;"></span>
+                <a id="download-link" class="btn btn-ghost" href="#" download>⬇ Download</a>
+              </div>
+            </div>
+            <img id="result-img" class="fade-in" alt="Detection result"
+                 style="width:100%; border-radius:8px; border:1px solid var(--border);" />
+          </div>
+        </div>
+
+        <!-- Log tab -->
+        <div id="tab-log" class="hidden fade-in">
+          <div id="log-table-wrap" style="overflow-x:auto; max-height:300px; overflow-y:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:.78rem; font-family:'JetBrains Mono',monospace;">
+              <thead>
+                <tr style="color:#475569; text-transform:uppercase; font-size:.65rem; letter-spacing:.08em; border-bottom:1px solid var(--border);">
+                  <th style="padding:6px 10px; text-align:left;">Time</th>
+                  <th style="padding:6px 10px; text-align:left;">Label</th>
+                  <th style="padding:6px 10px; text-align:right;">Conf</th>
+                  <th style="padding:6px 10px; text-align:left;">Source</th>
+                </tr>
+              </thead>
+              <tbody id="log-tbody">
+                <tr><td colspan="4" style="padding:20px; text-align:center; color:#475569;">No detections logged yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="flex justify-end mt-3">
+            <button class="btn btn-ghost" style="font-size:.75rem;" onclick="clearLog()">Clear Log</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── RIGHT COLUMN ── -->
+    <div class="flex flex-col gap-5">
+
+      <!-- Live stats -->
+      <div class="card p-5">
+        <h2 style="font-size:.75rem; font-weight:600; letter-spacing:.12em; color:#475569; margin-bottom:14px;">LIVE STATS</h2>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="stat-chip">
+            <div class="value" id="fps-val">—</div>
+            <div class="label">FPS</div>
+          </div>
+          <div class="stat-chip">
+            <div class="value" id="conf-val">—</div>
+            <div class="label">Threshold</div>
+          </div>
+          <div class="stat-chip" style="grid-column:span 2;">
+            <div class="value" id="dets-val" style="color:var(--amber, #ffb300);">0</div>
+            <div class="label">Total Detections (session)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Confidence control -->
+      <div class="card p-5">
+        <h2 style="font-size:.75rem; font-weight:600; letter-spacing:.12em; color:#475569; margin-bottom:16px;">CONFIDENCE THRESHOLD</h2>
+        <input type="range" class="slider" id="conf-slider" min="0.1" max="0.95" step="0.05" value="0.5" oninput="updateConfidence(this.value)" />
+        <div class="flex justify-between mt-2" style="font-size:.72rem; color:#64748b;">
+          <span>Sensitive (0.1)</span>
+          <span id="conf-slider-label" style="color:var(--cyan); font-weight:600; font-family:'JetBrains Mono',monospace;">0.50</span>
+          <span>Precise (0.95)</span>
+        </div>
+        <p style="font-size:.72rem; color:#475569; margin-top:10px; line-height:1.6;">
+          Lower = more detections (more false positives).<br/>
+          Higher = fewer but more certain detections.
+        </p>
+      </div>
+
+      <!-- Model info -->
+      <div class="card p-5">
+        <h2 style="font-size:.75rem; font-weight:600; letter-spacing:.12em; color:#475569; margin-bottom:14px;">MODEL INFO</h2>
+        <div class="flex flex-col gap-2" style="font-size:.8rem;">
+          <div class="flex justify-between">
+            <span style="color:#64748b;">Architecture</span>
+            <span style="font-family:'JetBrains Mono',monospace; color:#e2e8f0;">YOLOv8</span>
+          </div>
+          <div class="flex justify-between">
+            <span style="color:#64748b;">Target class</span>
+            <span style="font-family:'JetBrains Mono',monospace; color:var(--cyan);">pothole</span>
+          </div>
+          <div class="flex justify-between">
+            <span style="color:#64748b;">Input size</span>
+            <span style="font-family:'JetBrains Mono',monospace; color:#e2e8f0;">640 × 640</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick guide -->
+      <div class="card p-5">
+        <h2 style="font-size:.75rem; font-weight:600; letter-spacing:.12em; color:#475569; margin-bottom:12px;">QUICK GUIDE</h2>
+        <ol style="font-size:.78rem; color:#64748b; line-height:2; padding-left:1.2rem;">
+          <li>Click <strong style="color:#e2e8f0;">Start Detection</strong> for live feed.</li>
+          <li>Adjust the <strong style="color:#e2e8f0;">confidence slider</strong> as needed.</li>
+          <li>Upload an image or video to analyse a file.</li>
+          <li>Download the annotated result when done.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<!-- ═══════════════════════ SCRIPT ═══════════════════════ -->
+<script>
+  /* ── State ── */
+  let detectionActive = false;
+  let currentJobId    = null;
+  let pollInterval    = null;
+  let logEntries      = [];
+
+  /* ── Tab switching ── */
+  function switchTab(name, btn) {
+    ['upload','log'].forEach(t => {
+      document.getElementById('tab-' + t).classList.add('hidden');
+    });
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.remove('hidden');
+    btn.classList.add('active');
+  }
+
+  /* ── Toast notifications ── */
+  function toast(msg, type = 'info', duration = 3500) {
+    const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    el.innerHTML = `<span>${icons[type] || 'ℹ️'}</span><span>${msg}</span>`;
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(() => el.remove(), duration);
+  }
+
+  /* ── Detection control ── */
+  function startDetection() {
+    fetch('/start', { method: 'POST' })
+      .then(r => r.json())
+      .then(() => {
+        detectionActive = true;
+        updateStatusBadge(true);
+        toast('Detection started', 'success');
+        document.getElementById('start-btn').disabled = true;
+        document.getElementById('stop-btn').disabled  = false;
+      })
+      .catch(() => toast('Failed to start detection', 'error'));
+  }
+
+  function stopDetection() {
+    fetch('/stop', { method: 'POST' })
+      .then(r => r.json())
+      .then(() => {
+        detectionActive = false;
+        updateStatusBadge(false);
+        toast('Detection stopped', 'info');
+        document.getElementById('start-btn').disabled = false;
+        document.getElementById('stop-btn').disabled  = true;
+      })
+      .catch(() => toast('Failed to stop detection', 'error'));
+  }
+
+  function updateStatusBadge(active) {
+    const badge = document.getElementById('status-badge');
+    badge.className = 'badge ' + (active ? 'badge-active' : 'badge-idle');
+    badge.innerHTML = `<span class="badge-dot"></span>${active ? 'DETECTING' : 'IDLE'}`;
+  }
+
+  function resetStats() {
+    fetch('/reset_stats', { method: 'POST' })
+      .then(() => { document.getElementById('dets-val').textContent = '0'; toast('Stats reset', 'info'); });
+  }
+
+  /* ── Confidence slider ── */
+  function updateConfidence(val) {
+    const v = parseFloat(val);
+    document.getElementById('conf-slider-label').textContent = v.toFixed(2);
+    fetch('/set_confidence', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confidence: v })
+    });
+  }
+
+  /* ── Live stats polling ── */
+  setInterval(() => {
+    fetch('/get_stats')
+      .then(r => r.json())
+      .then(d => {
+        document.getElementById('fps-val').textContent  = d.fps.toFixed(1);
+        document.getElementById('conf-val').textContent = d.confidence.toFixed(2);
+        document.getElementById('dets-val').textContent = d.total_detections;
+        if (d.detection_active !== detectionActive) {
+          detectionActive = d.detection_active;
+          updateStatusBadge(detectionActive);
+        }
+      })
+      .catch(() => {});
+  }, 1000);
+
+  /* ── File handling ── */
+  let selectedFile = null;
+
+  function handleFileSelect(e) {
+    const file = e.target.files[0];
+    if (file) showSelectedFile(file);
+  }
+  function handleDragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('drag-over'); }
+  function handleDragLeave()  { document.getElementById('drop-zone').classList.remove('drag-over'); }
+  function handleDrop(e) {
+    e.preventDefault();
+    document.getElementById('drop-zone').classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) showSelectedFile(file);
+  }
+  function showSelectedFile(file) {
+    selectedFile = file;
+    document.getElementById('file-name').textContent = file.name;
+    document.getElementById('file-size').textContent = formatBytes(file.size);
+    document.getElementById('selected-file-info').classList.remove('hidden');
+    document.getElementById('result-section').classList.add('hidden');
+    document.getElementById('progress-section').classList.add('hidden');
+  }
+  function formatBytes(b) {
+    if (b < 1024) return b + ' B';
+    if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+    return (b/1048576).toFixed(1) + ' MB';
+  }
+
+  /* ── Upload & process ── */
+  function uploadAndProcess() {
+    if (!selectedFile) { toast('No file selected', 'error'); return; }
+
+    const btn = document.getElementById('process-btn');
+    btn.disabled = true;
+    btn.textContent = 'Uploading…';
+
+    document.getElementById('progress-section').classList.remove('hidden');
+    document.getElementById('result-section').classList.add('hidden');
+    setProgress(5, 'Uploading…');
+
+    const form = new FormData();
+    form.append('file', selectedFile);
+
+    fetch('/upload', { method: 'POST', body: form })
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) { toast(data.error, 'error'); resetBtn(btn); return; }
+
+        currentJobId = data.job_id;
+
+        if (selectedFile.type.startsWith('image/') || selectedFile.name.match(/\.(png|jpe?g)$/i)) {
+          // Image: processed synchronously — poll once
+          pollStatus(currentJobId);
+        } else {
+          // Video: background job
+          toast('Video queued for processing…', 'info');
+          btn.textContent = 'Processing…';
+          pollInterval = setInterval(() => pollStatus(currentJobId), 2000);
+        }
+      })
+      .catch(err => { toast('Upload failed: ' + err.message, 'error'); resetBtn(btn); });
+  }
+
+  function pollStatus(jobId) {
+    fetch('/upload_status/' + jobId)
+      .then(r => r.json())
+      .then(data => {
+        if (data.progress) setProgress(data.progress, `Processing… ${data.progress}%`);
+
+        if (data.status === 'completed') {
+          clearInterval(pollInterval);
+          setProgress(100, 'Complete!');
+          showResult(data);
+          resetBtn(document.getElementById('process-btn'));
+          toast('Processing complete!', 'success');
+          addLogEntry(data, selectedFile ? selectedFile.name : '—');
+        } else if (data.status === 'error') {
+          clearInterval(pollInterval);
+          toast('Processing error: ' + (data.message || 'unknown'), 'error');
+          resetBtn(document.getElementById('process-btn'));
+        }
+      })
+      .catch(() => clearInterval(pollInterval));
+  }
+
+  function showResult(data) {
+    const section = document.getElementById('result-section');
+    section.classList.remove('hidden');
+
+    if (data.image_url) {
+      const img = document.getElementById('result-img');
+      img.src = data.image_url + '?t=' + Date.now();
+      img.style.display = '';
+      document.getElementById('download-link').href = data.download_url || data.image_url;
+    } else if (data.download_url) {
+      // Video — show download link only
+      document.getElementById('result-img').style.display = 'none';
+      document.getElementById('download-link').href = data.download_url;
+    }
+
+    if (data.detections !== undefined) {
+      const badge = document.getElementById('result-dets');
+      badge.style.display = '';
+      badge.textContent = `${data.detections} pothole${data.detections !== 1 ? 's' : ''} detected`;
+    }
+  }
+
+  function setProgress(pct, label) {
+    document.getElementById('progress-bar').style.width   = pct + '%';
+    document.getElementById('progress-pct').textContent   = pct + '%';
+    document.getElementById('progress-label').textContent = label;
+  }
+  function resetBtn(btn) { btn.disabled = false; btn.textContent = '⚡ Process'; }
+
+  /* ── Detection log ── */
+  function addLogEntry(data, source) {
+    const now = new Date().toLocaleTimeString();
+    logEntries.unshift({ time: now, label: 'pothole', conf: '—', source });
+    renderLog();
+  }
+  function renderLog() {
+    const tbody = document.getElementById('log-tbody');
+    if (!logEntries.length) {
+      tbody.innerHTML = '<tr><td colspan="4" style="padding:20px; text-align:center; color:#475569;">No detections logged yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = logEntries.slice(0, 50).map(e => `
+      <tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:7px 10px; color:#64748b;">${e.time}</td>
+        <td style="padding:7px 10px; color:var(--cyan);">${e.label}</td>
+        <td style="padding:7px 10px; text-align:right;">${e.conf}</td>
+        <td style="padding:7px 10px; color:#94a3b8; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${e.source}</td>
+      </tr>`).join('');
+  }
+  function clearLog() { logEntries = []; renderLog(); }
+
+  /* ── Init ── */
+  document.getElementById('stop-btn').disabled = true;
+</script>
+</body>
+</html>

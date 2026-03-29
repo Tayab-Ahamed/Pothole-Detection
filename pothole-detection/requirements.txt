@@ -1,0 +1,17 @@
+# Core ML / CV
+ultralytics>=8.0.0
+opencv-python>=4.8.0
+torch>=2.0.0
+numpy>=1.24.0
+Pillow>=10.0.0
+
+# Web app
+Flask>=3.0.0
+flask-cors>=4.0.0
+Werkzeug>=3.0.0
+
+# CLI utilities
+tqdm>=4.66.0
+
+# Data logging
+pandas>=2.0.0
