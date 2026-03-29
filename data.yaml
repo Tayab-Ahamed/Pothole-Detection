@@ -1,0 +1,35 @@
+# ══════════════════════════════════════════════════════════════════════════
+# data.yaml — YOLOv8 dataset configuration for pothole detection
+# ══════════════════════════════════════════════════════════════════════════
+#
+# Directory layout expected (all paths relative to `path`):
+#
+#   pothole-detection/
+#   ├── data/
+#   │   ├── train/
+#   │   │   ├── images/   ← training images (.jpg / .png)
+#   │   │   └── labels/   ← YOLO .txt annotations
+#   │   ├── val/
+#   │   │   ├── images/
+#   │   │   └── labels/
+#   │   └── test/         ← optional
+#   │       ├── images/
+#   │       └── labels/
+#   └── data.yaml         ← this file
+#
+# Free datasets:
+#   • https://universe.roboflow.com/search?q=pothole  (search "pothole")
+#   • https://public.roboflow.com/object-detection/pothole
+#
+# After downloading, export in "YOLOv8" format and place the
+# train/val/test folders under data/.
+# ══════════════════════════════════════════════════════════════════════════
+
+path: .             # project root — other paths are relative to this
+train: data/train/images
+val:   data/val/images
+# test: data/test/images    # uncomment when you have test data
+
+nc: 1               # number of classes
+names:
+  - pothole
