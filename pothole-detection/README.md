@@ -68,10 +68,10 @@ pip install -r requirements.txt
 
 The repository does **not** include model weights (`.pt` files) to keep it lightweight.
 
-### Option A — Use the base YOLOv8 model (no training required)
+### Option A — Smoke-test with the base YOLOv8 model
 
 `app.py` and `detect_realtime.py` automatically fall back to `yolov8n.pt` if `best_pothole.pt` is not found.  
-Ultralytics will download `yolov8n.pt` on first run.
+Ultralytics will download `yolov8n.pt` on first run. This generic model is useful only to check the inference pipeline; it is not trained to detect potholes. Detection requires weights whose class labels explicitly include `pothole`. Generic class 0 (for example, `person`) is never treated as a pothole.
 
 ### Option B — Train a custom pothole model (recommended)
 

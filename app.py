@@ -132,7 +132,7 @@ def process_frame(frame, current_model: YOLO, conf: float) -> tuple:
                 else f"class_{cls_id}"
             )
 
-            if "pothole" in label.lower() or cls_id == 0:
+            if "pothole" in label.lower():
                 detections.append({"xyxy": xyxy, "conf": score, "label": "pothole"})
                 frame = draw_box(frame, xyxy, "pothole", score)
 
